@@ -233,6 +233,38 @@ pub fn crop() -> Result<()> {
     Ok(())
 }
 
+pub fn crop2() -> Result<()> {
+    let file_path = Path::new(RESOURCE).join("char");
+
+    let info: Vec<Char> = read_json(&file_path.join("Char.json"))?;
+    let map_info: HashMap<_, _> = info
+        .into_iter()
+        .map(|s| (s.Name, s.en.unwrap_or_default()))
+        .collect();
+    let mut v = Vec::with_capacity(300);
+    for entry in fs::read_dir(r"E:\pictures\foot_output")? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            let file_name = path.file_name().unwrap().to_string_lossy();
+            if let Some((name, _)) = file_name.split_once('_') {
+                if let Some(en) = map_info.get(name) {
+                    v.push((path.to_owned(), name.to_string(), en.clone()));
+                }
+            }
+        }
+    }
+    let len = v.len();
+    simple_rng::suffix(&mut v, len);
+    let v: Vec<_> = v
+        .into_iter()
+        .enumerate()
+        .map(|(i, mut c)| Chunk::new(c.0, vec![c.1], vec![c.2]).unwrap())
+        .collect();
+    write_json("Crop2.json", &v)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,7 +283,7 @@ mod tests {
         // if let Err(e) = birth() {
         //     println!("{e}");
         // }
-        if let Err(e) = crop() {
+        if let Err(e) = crop2() {
             println!("{e}");
         }
     }

@@ -1,18 +1,4 @@
 pub mod chunk;
-// mod draw;
-// [package]
-// authors = ["theotherphil"]
-// description = "Image processing operations"
-// edition = "2021"
-// exclude = [".github/*", "examples/*", "tests/*"]
-// homepage = "https://github.com/image-rs/imageproc"
-// license = "MIT"
-// name = "imageproc"
-// readme = "README.md"
-// repository = "https://github.com/image-rs/imageproc.git"
-// rust-version = "1.70.0"
-// version = "0.25.0"
-#[allow(dead_code)]
 mod imageproc;
 
 use crate::{
@@ -581,8 +567,8 @@ impl BigImgBuilder<'_> {
     /// # Parameters
     /// - `text_color`: 文本颜色，使用 `Rgba<u8>` 类型表示
     ///
-    pub fn text_color(&mut self, text_color: Rgba<u8>) -> &mut Self {
-        self.text_color = text_color;
+    pub fn text_color(&mut self, text_color: impl Into<Rgba<u8>>) -> &mut Self {
+        self.text_color = text_color.into();
         self
     }
 
@@ -591,8 +577,12 @@ impl BigImgBuilder<'_> {
     /// # Parameters
     /// - `color`: 文本背景颜色，使用 `(Rgba<u8>, Rgba<u8>)` 类型表示
     ///
-    pub fn text_background_color(&mut self, color: (Rgba<u8>, Rgba<u8>)) -> &mut Self {
-        self.text_background_color = color;
+    pub fn text_background_color(
+        &mut self,
+        color_up: impl Into<Rgba<u8>>,
+        color_down: impl Into<Rgba<u8>>,
+    ) -> &mut Self {
+        self.text_background_color = (color_up.into(), color_down.into());
         self
     }
 
