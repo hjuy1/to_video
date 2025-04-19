@@ -1,5 +1,5 @@
 use super::{
-    super::{definitions::Image, point::Point, rect::Rect as image_Rect},
+    super::{definitions::Image, point::Point, rect::Rect},
     DrawMut,
 };
 use image::{GenericImage, ImageBuffer};
@@ -226,7 +226,7 @@ where
         })
     }
 
-    fn draw_filled_rect(&self, rect: image_Rect, color: Self::Pixel) -> Image<Self::Pixel> {
+    fn draw_filled_rect(&self, rect: Rect, color: Self::Pixel) -> Image<Self::Pixel> {
         let mut out = ImageBuffer::new(self.width(), self.height());
         out.copy_from(self, 0, 0).unwrap();
         out.draw_filled_rect_mut(rect, color);
@@ -235,7 +235,7 @@ where
 
     fn draw_filled_rounded_rect(
         &self,
-        rect: image_Rect,
+        rect: Rect,
         radius: i32,
         color: Self::Pixel,
     ) -> Image<Self::Pixel> {
@@ -245,7 +245,7 @@ where
         out
     }
 
-    fn draw_hollow_rect(&self, rect: image_Rect, color: Self::Pixel) -> Image<Self::Pixel> {
+    fn draw_hollow_rect(&self, rect: Rect, color: Self::Pixel) -> Image<Self::Pixel> {
         let mut out = ImageBuffer::new(self.width(), self.height());
         out.copy_from(self, 0, 0).unwrap();
         out.draw_hollow_rect_mut(rect, color);
@@ -254,7 +254,7 @@ where
 
     fn draw_hollow_rounded_rect(
         &self,
-        rect: image_Rect,
+        rect: Rect,
         radius: i32,
         color: Self::Pixel,
     ) -> Image<Self::Pixel> {

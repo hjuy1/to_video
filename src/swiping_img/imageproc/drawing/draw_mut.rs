@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 use super::{
-    super::{point::Point, rect::Rect as image_Rect},
+    super::{point::Point, rect::Rect},
     draw_if_in_bounds, Canvas,
 };
 use std::cmp::{max, min};
@@ -474,8 +474,8 @@ where
         });
     }
 
-    fn draw_filled_rect_mut(&mut self, rect: image_Rect, color: Self::Pixel) {
-        let canvas_bounds = image_Rect::at(0, 0).of_size(self.width(), self.height());
+    fn draw_filled_rect_mut(&mut self, rect: Rect, color: Self::Pixel) {
+        let canvas_bounds = Rect::at(0, 0).of_size(self.width(), self.height());
         if let Some(intersection) = canvas_bounds.intersect(rect) {
             for dy in 0..intersection.height() {
                 for dx in 0..intersection.width() {
@@ -487,7 +487,7 @@ where
         }
     }
 
-    fn draw_filled_rounded_rect_mut(&mut self, rect: image_Rect, radius: i32, color: Self::Pixel) {
+    fn draw_filled_rounded_rect_mut(&mut self, rect: Rect, radius: i32, color: Self::Pixel) {
         let (left, right, top, bottom) = (rect.left(), rect.right(), rect.top(), rect.bottom());
         // 绘制四个圆角
         self.draw_filled_circle_mut((left + radius, top + radius), radius, color);
@@ -497,19 +497,17 @@ where
 
         // 绘制矩形的顶部和底部，去除圆角部分
         self.draw_filled_rect_mut(
-            image_Rect::at(left, top + radius)
-                .of_size(rect.width(), rect.height() - 2 * radius as u32),
+            Rect::at(left, top + radius).of_size(rect.width(), rect.height() - 2 * radius as u32),
             color,
         );
         // 绘制矩形的左侧和右侧，去除圆角部分
         self.draw_filled_rect_mut(
-            image_Rect::at(left + radius, top)
-                .of_size(rect.width() - 2 * radius as u32, rect.height()),
+            Rect::at(left + radius, top).of_size(rect.width() - 2 * radius as u32, rect.height()),
             color,
         );
     }
 
-    fn draw_hollow_rect_mut(&mut self, rect: image_Rect, color: Self::Pixel) {
+    fn draw_hollow_rect_mut(&mut self, rect: Rect, color: Self::Pixel) {
         let left = rect.left() as f32;
         let right = rect.right() as f32;
         let top = rect.top() as f32;
@@ -521,7 +519,7 @@ where
         self.draw_line_segment_mut((right, top), (right, bottom), color);
     }
 
-    fn draw_hollow_rounded_rect_mut(&mut self, rect: image_Rect, radius: i32, color: Self::Pixel) {
+    fn draw_hollow_rounded_rect_mut(&mut self, rect: Rect, radius: i32, color: Self::Pixel) {
         // let left = rect.left() as f32;
         // let right = rect.right() as f32;
         // let top = rect.top() as f32;
