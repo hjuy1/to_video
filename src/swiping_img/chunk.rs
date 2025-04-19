@@ -7,10 +7,63 @@ use crate::{
     err_new, err_new_image,
     error::{Kind, Result},
 };
-use ab_glyph::point;
 use image::{DynamicImage, GenericImage, GenericImageView};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+pub enum Node {
+    Pic(Pic),
+    Text(Text),
+}
+
+pub struct Pic {
+    rect: Rect,
+    pic_path: PathBuf,
+}
+pub struct Text {
+    rect: Rect,
+    text: String,
+    color: image::Rgba<u8>,
+    max_scale: f32,
+    font: ab_glyph::FontVec,
+}
+
+pub trait Combain {
+    fn combain(&mut self, node: Node) -> Result<()>;
+}
+
+impl Combain for DynamicImage {
+    fn combain(&mut self, node: Node) -> Result<()> {
+        match node {
+            Node::Pic(pic) => {
+                let (rect_w, rect_h) = (pic.rect.width(), pic.rect.height());
+                // 打开并调整图片大小
+                let img = image::open(&pic.pic_path)
+                    .map_err(|e| err_new_image!(e))?
+                    .thumbnail(rect_w, rect_h);
+                let (img_w, img_h) = img.dimensions();
+                // 将调整好大小的图片复制到目标图像的中心位置
+                self.copy_from(&img, (rect_w - img_w) / 2, (rect_h - img_h) / 2)
+                    .map_err(|e| err_new_image!(e))?;
+            }
+            Node::Text(text) => {
+                self.draw_filled_rounded_rect_mut(text.rect, 10, text.color);
+
+                self.draw_text_center_mut(
+                    text.color,
+                    text.rect,
+                    text.max_scale,
+                    &text.font,
+                    &text.text,
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+// 定义 Chunk 结构体
+// pub struct Chunk(Vec<Area>);
 
 // 定义 Chunk 结构体
 #[derive(Serialize, Deserialize)]
@@ -123,10 +176,7 @@ impl Chunk {
             let high = pic_h + u32::try_from(i)? * h_up;
             target.draw_text_center_mut(
                 *text_color,
-                ab_glyph::Rect {
-                    min: point(10.0, high as f32),
-                    max: point((width_chunk - 10) as f32, (high + h_up) as f32),
-                },
+                Rect::at(10, i32::try_from(high)?).of_size(width_chunk - 20, h_up),
                 *max_scale,
                 &font,
                 str,
@@ -138,10 +188,7 @@ impl Chunk {
             let high = pic_h + text_up_h + u32::try_from(i)? * h_down;
             target.draw_text_center_mut(
                 *text_color,
-                ab_glyph::Rect {
-                    min: point(10.0, high as f32),
-                    max: point((width_chunk - 10) as f32, (high + h_down) as f32),
-                },
+                Rect::at(10, i32::try_from(high)?).of_size(width_chunk - 20, h_down),
                 *max_scale,
                 &font,
                 str,
@@ -161,4 +208,11 @@ impl Chunk {
         // 返回绘制完成的图像
         Ok(target)
     }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_name() {}
 }

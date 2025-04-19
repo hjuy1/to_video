@@ -12,10 +12,10 @@ fn main() -> Result<()> {
     let t = Instant::now();
     let data_file = Path::new("./data").join("Crop2.json");
 
-    let work_dir = Path::new("E:/pictures/arknights/0birth");
+    let work_dir = Path::new("D:/pictures/arknights/0birth");
     fs::create_dir_all(work_dir).map_err(|e| err_new_io!(e))?;
 
-    let data_use = &read_json(data_file)?;
+    let data_use = &read_json(data_file)?[..5];
 
     // let si = BigImg::new(work_dir, &data_use);
     let si = BigImg::builder(work_dir, &data_use)

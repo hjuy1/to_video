@@ -1,14 +1,15 @@
 use super::{
-    super::{definitions::Clamp, pixelops::weighted_sum},
+    super::{definitions::Clamp, pixelops::weighted_sum, rect},
     Canvas,
 };
-use ab_glyph::{point, Font, GlyphId, OutlinedGlyph, PxScale, Rect as ab_Rect, ScaleFont};
+use ab_glyph::{point, Font, GlyphId, OutlinedGlyph, PxScale, ScaleFont};
 use image::Pixel;
+
 fn layout_glyphs(
     scale: impl Into<PxScale> + Copy,
     font: &impl Font,
     text: &str,
-    mut f: impl FnMut(OutlinedGlyph, ab_Rect),
+    mut f: impl FnMut(OutlinedGlyph, ab_glyph::Rect),
 ) -> (u32, u32) {
     let (mut w, mut h) = (0f32, 0f32);
 
@@ -78,7 +79,7 @@ where
     fn draw_text_center_mut(
         &mut self,
         color: Self::Pixel,
-        rect: ab_Rect,
+        rect: rect::Rect,
         scale: impl Into<PxScale> + Copy,
         font: &impl Font,
         text: &str,
@@ -98,12 +99,8 @@ where
             .unwrap_or(0);
 
         // 解构矩形区域
-        let (rect_left, rect_top, rect_width, rect_height) = (
-            rect.min.x.round() as i32,
-            rect.min.y.round() as i32,
-            rect.width().round() as u32,
-            rect.height().round() as u32,
-        );
+        let (rect_left, rect_top, rect_width, rect_height) =
+            (rect.left(), rect.top(), rect.width(), rect.height());
 
         // 根据矩形区域和文本原始尺寸计算最终字体大小
         let scale = if text_raw_width > rect_width || text_raw_height > rect_height {
