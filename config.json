@@ -1,0 +1,15 @@
+
+    {
+      "screen": [1920, 1080],
+      "fps": 30,
+      "transition_sec": 2,
+      "work_dir": ".",
+      "overlap": 1,
+      "step": 5,
+      "back_color": "black",
+      "cover_time": 3,
+      "ending_time": 3,
+      "video_swip_speed": 10,
+      "width_slides": 192
+    }
+    

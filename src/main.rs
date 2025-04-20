@@ -1,6 +1,8 @@
 pub mod error;
+pub mod imageproc;
 pub mod parse_data;
 mod prelude;
+pub mod slides;
 pub mod swiping_img;
 
 use error::Result;
@@ -18,10 +20,9 @@ fn main() -> Result<()> {
     let data_use = &read_json(data_file)?[..5];
 
     // let si = BigImg::new(work_dir, &data_use);
-    let si = BigImg::builder(work_dir, &data_use)
-        .text_background_color([236, 162, 56, 255], [255, 226, 197, 255])
-        .text_color([0, 0, 0, 255])
-        .build()?;
+    let mut si = BigImg::new_with_default(work_dir, &data_use);
+    si.text_background_color([236, 162, 56, 255], [255, 226, 197, 255])
+        .text_color([0, 0, 0, 255]);
     debug_print(&si);
     si.run("result.mp4")?;
 

@@ -1,12 +1,10 @@
 pub mod chunk;
-mod imageproc;
-
 use crate::{
-    err_new, err_new_image, err_new_io, err_new_tryfrom,
+    err_new, err_new_image, err_new_tryfrom,
     error::{Kind, Result},
     prelude::debug_print,
 };
-use ab_glyph::FontVec;
+use ab_glyph::FontArc;
 pub use chunk::Chunk;
 use image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 use std::{
@@ -40,6 +38,7 @@ use std::{
 /// * `video_background_color`: 视频的背景颜色，以字符串表示。
 /// * `video_swip_speed`: 视频的滑动速度，用视频滑动 `width_chunk` 所需的秒数表示。
 /// * `video_fps`: 视频的帧率（每秒帧数）。
+#[derive(Clone)]
 pub struct BigImg<'a> {
     work_dir: PathBuf,
     chunks: &'a [Chunk],
@@ -53,7 +52,7 @@ pub struct BigImg<'a> {
     pic_h: u32,
     text_up_h: u32,
     text_down_h: u32,
-    font: FontVec,
+    font: FontArc,
     video_cover_time: u32,
     video_ending_time: u32,
     video_background_color: String,
@@ -62,37 +61,186 @@ pub struct BigImg<'a> {
 }
 
 impl<'a> BigImg<'a> {
-    /// 创建一个新的 `BigImg` 实例。
-    ///
-    /// # Parameters
-    /// - `work_dir`: 工作路径，用于保存生成的文件。
-    /// - `chunks`: 图像块的引用切片。
-    ///
-    /// # Results
-    /// 返回一个新的 `BigImg` 实例。
-    ///
-    /// # Panics
-    /// 如果构建过程中发生错误（例如无效参数），则expect("BigImg new failed")。
-    ///
     #[must_use]
-    pub fn new(work_dir: &Path, chunks: &'a [Chunk]) -> BigImg<'a> {
-        BigImgBuilder::new(work_dir, chunks)
-            .build()
-            .expect("BigImg new failed")
+    pub fn new_with_default(work_dir: &Path, chunks: &'a [Chunk]) -> Self {
+        let font = FontArc::try_from_slice(include_bytes!("../MiSans-Demibold.ttf")).unwrap();
+        Self {
+            work_dir: work_dir.to_path_buf(),
+            chunks,
+            screen: (1920, 1080),
+            step: 40,
+            width_chunk: 480,
+            text_background_color: (Rgba([23, 150, 235, 255]), Rgba([44, 85, 153, 255])),
+            text_color: Rgba([255, 255, 255, 255]),
+            max_scale: 120.0,
+            pic_h: 520,
+            text_up_h: 214,
+            font,
+            video_cover_time: 3,
+            video_ending_time: 3,
+            video_background_color: String::from("white"),
+            video_swip_speed: 3,
+            video_fps: 60,
+            overlap: 4,
+            text_down_h: 346,
+        }
     }
 
-    /// 创建一个新的 `BigImgBuilder` 实例。
+    /// 设置屏幕分辨率。
     ///
     /// # Parameters
-    /// - `work_dir`: 工作路径，用于保存生成的文件。
-    /// - `chunks`: 图像块的引用切片。
+    /// - `screen`: 屏幕分辨率元组 `(宽度, 高度)`。
     ///
-    /// # Results
-    /// 返回一个新的 `BigImgBuilder` 实例。
+    /// # Panics
+    /// 如果屏幕宽高为零，则会触发断言失败。
     ///
-    #[must_use]
-    pub fn builder(work_dir: &Path, chunks: &'a [Chunk]) -> BigImgBuilder<'a> {
-        BigImgBuilder::new(work_dir, chunks)
+    pub fn screen(&mut self, screen: (u32, u32)) -> &mut Self {
+        assert!(
+            screen.0 != 0 && screen.1 != 0,
+            "Screen dimensions must be non-zero."
+        );
+        self.screen = screen;
+        self
+    }
+
+    /// 设置步长
+    ///
+    /// # Parameters
+    /// - `step`: 步长值，必须是非零值
+    ///
+    /// # Panics
+    /// - 如果 `step` 为零，程序将 panic
+    ///
+    pub fn step(&mut self, step: u32) -> &mut Self {
+        assert_ne!(step, 0, "Step must be non-zero.");
+        self.step = step;
+        self
+    }
+
+    /// 设置宽度块大小
+    ///
+    /// # Parameters
+    /// - `width_chunk`: 宽度块大小，必须是非零值
+    ///
+    /// # Panics
+    /// - 如果 `width_chunk` 为零，程序将 panic
+    ///
+    pub fn width_chunk(&mut self, width_chunk: u32) -> &mut Self {
+        assert_ne!(width_chunk, 0, "Width chunk must be non-zero.");
+        self.width_chunk = width_chunk;
+        self
+    }
+
+    /// 设置文本颜色
+    ///
+    /// # Parameters
+    /// - `text_color`: 文本颜色，使用 `Rgba<u8>` 类型表示
+    ///
+    pub fn text_color(&mut self, text_color: impl Into<Rgba<u8>>) -> &mut Self {
+        self.text_color = text_color.into();
+        self
+    }
+
+    /// 设置文本背景颜色
+    ///
+    /// # Parameters
+    /// - `color`: 文本背景颜色，使用 `(Rgba<u8>, Rgba<u8>)` 类型表示
+    ///
+    pub fn text_background_color(
+        &mut self,
+        color_up: impl Into<Rgba<u8>>,
+        color_down: impl Into<Rgba<u8>>,
+    ) -> &mut Self {
+        self.text_background_color = (color_up.into(), color_down.into());
+        self
+    }
+
+    /// 设置最大缩放比例
+    ///
+    /// # Parameters
+    /// - `max_scale`: 最大缩放比例，使用 `f32` 类型表示
+    ///
+    pub fn max_scale(&mut self, max_scale: f32) -> &mut Self {
+        self.max_scale = max_scale;
+        self
+    }
+
+    /// 设置图片高度
+    ///
+    /// # Parameters
+    /// - `pic_h`: 图片高度，必须是非零值
+    ///
+    /// # Panics
+    /// - 如果 `pic_h` 为零，程序将 panic
+    ///
+    pub fn pic_h(&mut self, pic_h: u32) -> &mut Self {
+        assert_ne!(pic_h, 0, "Picture height must be non-zero.");
+        self.pic_h = pic_h;
+        self
+    }
+
+    /// 设置上部文本高度
+    ///
+    /// # Parameters
+    /// - `text_up_h`: 上部文本高度，必须是非零值
+    ///
+    /// # Panics
+    /// - 如果 `text_up_h` 为零，程序将 panic
+    ///
+    pub fn text_up_h(&mut self, text_up_h: u32) -> &mut Self {
+        assert_ne!(text_up_h, 0, "Upper text height must be non-zero.");
+        self.text_up_h = text_up_h;
+        self
+    }
+
+    /// 设置视频封面时间
+    ///
+    /// # Parameters
+    /// - `video_cover_time`: 视频封面时间，使用 `u32` 类型表示
+    ///
+    pub fn video_cover_time(&mut self, video_cover_time: u32) -> &mut Self {
+        self.video_cover_time = video_cover_time;
+        self
+    }
+
+    /// 设置视频结束时间
+    ///
+    /// # Parameters
+    /// - `video_ending_time`: 视频结束时间，使用 `u32` 类型表示
+    ///
+    pub fn video_ending_time(&mut self, video_ending_time: u32) -> &mut Self {
+        self.video_ending_time = video_ending_time;
+        self
+    }
+
+    /// 设置视频背景颜色
+    ///
+    /// # Parameters
+    /// - `video_background_color`: 视频背景颜色，使用 `String` 类型表示
+    ///
+    pub fn video_background_color(&mut self, video_background_color: String) -> &mut Self {
+        self.video_background_color = video_background_color;
+        self
+    }
+
+    /// 设置视频滑动速度
+    ///
+    /// # Parameters
+    /// - `video_swip_speed`: 视频滑动速度，使用 `u32` 类型表示
+    ///
+    pub fn video_swip_speed(&mut self, video_swip_speed: u32) -> &mut Self {
+        self.video_swip_speed = video_swip_speed;
+        self
+    }
+
+    /// 设置视频帧率
+    ///
+    /// # Parameters
+    /// - `video_fps`: 视频帧率，使用 `u32` 类型表示
+    ///
+    pub fn video_fps(&mut self, video_fps: u32) -> &mut Self {
+        self.video_fps = video_fps;
+        self
     }
 }
 
@@ -391,286 +539,5 @@ impl Debug for BigImg<'_> {
             .field("video_swip_speed", &self.video_swip_speed)
             .field("video_fps", &self.video_fps)
             .finish()
-    }
-}
-
-pub struct BigImgBuilder<'a> {
-    work_dir: PathBuf,
-    chunks: &'a [Chunk],
-    screen: (u32, u32),
-    step: u32,
-    width_chunk: u32,
-    text_background_color: (Rgba<u8>, Rgba<u8>),
-    text_color: Rgba<u8>,
-    max_scale: f32,
-    pic_h: u32,
-    text_up_h: u32,
-    font: Option<FontVec>,
-    video_cover_time: u32,
-    video_ending_time: u32,
-    video_background_color: String,
-    video_swip_speed: u32,
-    video_fps: u32,
-}
-
-impl<'a> BigImgBuilder<'a> {
-    /// 创建一个新的 `BigImgBuilder` 实例。
-    ///
-    /// # Parameters
-    /// - `work_dir`: 工作路径，用于保存生成的文件。
-    /// - `chunks`: 图像块的引用切片。
-    ///
-    /// # Results
-    /// 返回一个新的 `BigImgBuilder` 实例。
-    ///
-    #[must_use]
-    pub fn new(work_dir: &Path, chunks: &'a [Chunk]) -> BigImgBuilder<'a> {
-        Self {
-            work_dir: work_dir.to_path_buf(),
-            chunks,
-            screen: (1920, 1080),
-            step: 40,
-            width_chunk: 480,
-            text_background_color: (Rgba([23, 150, 235, 255]), Rgba([44, 85, 153, 255])),
-            text_color: Rgba([255, 255, 255, 255]),
-            max_scale: 120.0,
-            pic_h: 520,
-            text_up_h: 214,
-            font: None,
-            video_cover_time: 3,
-            video_ending_time: 3,
-            video_background_color: String::from("white"),
-            video_swip_speed: 3,
-            video_fps: 60,
-        }
-    }
-
-    /// 构建 `BigImg` 实例。
-    ///
-    /// # Parameters
-    /// 无。
-    ///
-    /// # Results
-    /// 如果成功，则返回一个新的 `BigImg` 实例；如果失败，则返回 `Err`。
-    ///
-    /// # Errors
-    /// - 如果 `chunks` 为空，则返回 `Err`。
-    /// - 如果 `pic_h` 大于屏幕高度，则返回 `Err`。
-    /// - 如果屏幕宽度不能被 `width_chunk` 整除，则返回 `Err`。
-    /// - 如果字体加载失败，则返回 `Err`。
-    ///
-    pub fn build(&mut self) -> Result<BigImg<'a>> {
-        if !self.work_dir.exists() {
-            return Err(err_new!(Kind::BigImgBuilderError, "work_dir is not exist"));
-        }
-        if self.chunks.is_empty() {
-            return Err(err_new!(Kind::BigImgBuilderError, "chunks data is empty"));
-        }
-        if self.pic_h > self.screen.1 {
-            return Err(err_new!(
-                Kind::BigImgBuilderError,
-                &format!(
-                    "err:\n{},\n{}\n pic_h > height_screen; {} > {}",
-                    file!(),
-                    line!(),
-                    self.pic_h,
-                    self.screen.1
-                )
-            ));
-        }
-        if self.screen.0 % self.width_chunk != 0 {
-            return Err(err_new!(
-                Kind::BigImgBuilderError,
-                &format!(
-                    "err: width_screen % width_chunk != 0; {} % {} != 0",
-                    self.screen.0, self.width_chunk
-                )
-            ));
-        }
-        self.step = self.step.min(u32::try_from(self.chunks.len()).unwrap_or(0));
-        Ok(BigImg {
-            work_dir: self.work_dir.clone(),
-            chunks: self.chunks,
-            screen: self.screen,
-            step: self.step,
-            width_chunk: self.width_chunk,
-            overlap: self.screen.0 / self.width_chunk,
-            text_background_color: self.text_background_color,
-            text_color: self.text_color,
-            max_scale: self.max_scale,
-            pic_h: self.pic_h,
-            text_up_h: self.text_up_h,
-            text_down_h: self.screen.1 - self.pic_h - self.text_up_h,
-            font: self.font.take().unwrap_or({
-                let font_buf = std::fs::read("./src/swiping_img/MiSans-Demibold.ttf")
-                    .map_err(|e| err_new_io!(e))?;
-                FontVec::try_from_vec(font_buf)
-                    .map_err(|e| err_new!(Kind::InvalidFont, &e.to_string()))?
-            }),
-            video_cover_time: self.video_cover_time,
-            video_ending_time: self.video_ending_time,
-            video_background_color: self.video_background_color.clone(),
-            video_swip_speed: self.video_swip_speed,
-            video_fps: self.video_fps,
-        })
-    }
-}
-
-impl BigImgBuilder<'_> {
-    /// 设置屏幕分辨率。
-    ///
-    /// # Parameters
-    /// - `screen`: 屏幕分辨率元组 `(宽度, 高度)`。
-    ///
-    /// # Panics
-    /// 如果屏幕宽高为零，则会触发断言失败。
-    ///
-    pub fn screen(&mut self, screen: (u32, u32)) -> &mut Self {
-        assert!(
-            screen.0 != 0 && screen.1 != 0,
-            "Screen dimensions must be non-zero."
-        );
-        self.screen = screen;
-        self
-    }
-
-    /// 设置步长
-    ///
-    /// # Parameters
-    /// - `step`: 步长值，必须是非零值
-    ///
-    /// # Panics
-    /// - 如果 `step` 为零，程序将 panic
-    ///
-    pub fn step(&mut self, step: u32) -> &mut Self {
-        assert_ne!(step, 0, "Step must be non-zero.");
-        self.step = step;
-        self
-    }
-
-    /// 设置宽度块大小
-    ///
-    /// # Parameters
-    /// - `width_chunk`: 宽度块大小，必须是非零值
-    ///
-    /// # Panics
-    /// - 如果 `width_chunk` 为零，程序将 panic
-    ///
-    pub fn width_chunk(&mut self, width_chunk: u32) -> &mut Self {
-        assert_ne!(width_chunk, 0, "Width chunk must be non-zero.");
-        self.width_chunk = width_chunk;
-        self
-    }
-
-    /// 设置文本颜色
-    ///
-    /// # Parameters
-    /// - `text_color`: 文本颜色，使用 `Rgba<u8>` 类型表示
-    ///
-    pub fn text_color(&mut self, text_color: impl Into<Rgba<u8>>) -> &mut Self {
-        self.text_color = text_color.into();
-        self
-    }
-
-    /// 设置文本背景颜色
-    ///
-    /// # Parameters
-    /// - `color`: 文本背景颜色，使用 `(Rgba<u8>, Rgba<u8>)` 类型表示
-    ///
-    pub fn text_background_color(
-        &mut self,
-        color_up: impl Into<Rgba<u8>>,
-        color_down: impl Into<Rgba<u8>>,
-    ) -> &mut Self {
-        self.text_background_color = (color_up.into(), color_down.into());
-        self
-    }
-
-    /// 设置最大缩放比例
-    ///
-    /// # Parameters
-    /// - `max_scale`: 最大缩放比例，使用 `f32` 类型表示
-    ///
-    pub fn max_scale(&mut self, max_scale: f32) -> &mut Self {
-        self.max_scale = max_scale;
-        self
-    }
-
-    /// 设置图片高度
-    ///
-    /// # Parameters
-    /// - `pic_h`: 图片高度，必须是非零值
-    ///
-    /// # Panics
-    /// - 如果 `pic_h` 为零，程序将 panic
-    ///
-    pub fn pic_h(&mut self, pic_h: u32) -> &mut Self {
-        assert_ne!(pic_h, 0, "Picture height must be non-zero.");
-        self.pic_h = pic_h;
-        self
-    }
-
-    /// 设置上部文本高度
-    ///
-    /// # Parameters
-    /// - `text_up_h`: 上部文本高度，必须是非零值
-    ///
-    /// # Panics
-    /// - 如果 `text_up_h` 为零，程序将 panic
-    ///
-    pub fn text_up_h(&mut self, text_up_h: u32) -> &mut Self {
-        assert_ne!(text_up_h, 0, "Upper text height must be non-zero.");
-        self.text_up_h = text_up_h;
-        self
-    }
-
-    /// 设置视频封面时间
-    ///
-    /// # Parameters
-    /// - `video_cover_time`: 视频封面时间，使用 `u32` 类型表示
-    ///
-    pub fn video_cover_time(&mut self, video_cover_time: u32) -> &mut Self {
-        self.video_cover_time = video_cover_time;
-        self
-    }
-
-    /// 设置视频结束时间
-    ///
-    /// # Parameters
-    /// - `video_ending_time`: 视频结束时间，使用 `u32` 类型表示
-    ///
-    pub fn video_ending_time(&mut self, video_ending_time: u32) -> &mut Self {
-        self.video_ending_time = video_ending_time;
-        self
-    }
-
-    /// 设置视频背景颜色
-    ///
-    /// # Parameters
-    /// - `video_background_color`: 视频背景颜色，使用 `String` 类型表示
-    ///
-    pub fn video_background_color(&mut self, video_background_color: String) -> &mut Self {
-        self.video_background_color = video_background_color;
-        self
-    }
-
-    /// 设置视频滑动速度
-    ///
-    /// # Parameters
-    /// - `video_swip_speed`: 视频滑动速度，使用 `u32` 类型表示
-    ///
-    pub fn video_swip_speed(&mut self, video_swip_speed: u32) -> &mut Self {
-        self.video_swip_speed = video_swip_speed;
-        self
-    }
-
-    /// 设置视频帧率
-    ///
-    /// # Parameters
-    /// - `video_fps`: 视频帧率，使用 `u32` 类型表示
-    ///
-    pub fn video_fps(&mut self, video_fps: u32) -> &mut Self {
-        self.video_fps = video_fps;
-        self
     }
 }
